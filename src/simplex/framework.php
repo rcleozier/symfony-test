@@ -4,36 +4,22 @@
  
 namespace Simplex;
  
-use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\Routing\Matcher\UrlMatcher;
-use Symfony\Component\Routing\Matcher\UrlMatcherInterface;
-use Symfony\Component\HttpKernel\Controller\ControllerResolverInterface;
+use Symfony\Component\Routing;
+use Symfony\Component\HttpKernel;
+use Symfony\Component\EventDispatcher\EventDispatcher;
  
-class Framework
+class Framework extends HttpKernel\HttpKernel
 {
-    protected $matcher;
-    protected $resolver;
- 
-    public function __construct(UrlMatcherInterface $matcher, ControllerResolverInterface $resolver)
+    public function __construct($routes)
     {
-        $this->matcher = $matcher;
-        $this->resolver = $resolver;
-    }
+        $context = new Routing\RequestContext();
+        $matcher = new Routing\Matcher\UrlMatcher($routes, $context);
+        $resolver = new HttpKernel\Controller\ControllerResolver();
  
-    public function handle(Request $request)
-    {
-        try {
-            $request->attributes->add($this->matcher->match($request->getPathInfo()));
+        $dispatcher = new EventDispatcher();
+        $dispatcher->addSubscriber(new HttpKernel\EventListener\RouterListener($matcher));
+        $dispatcher->addSubscriber(new HttpKernel\EventListener\ResponseListener('UTF-8'));
  
-            $controller = $this->resolver->getController($request);
-            $arguments = $this->resolver->getArguments($request, $controller);
- 
-            return call_user_func_array($controller, $arguments);
-        } catch (ResourceNotFoundException $e) {
-            return new Response('Not Found', 404);
-        } catch (\Exception $e) {
-            return new Response('An error occurred', 500);
-        }
+        parent::__construct($dispatcher, $resolver);
     }
 }
